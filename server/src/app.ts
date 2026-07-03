@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { env } from './config/env.js';
 import healthRoutes from './routes/health.routes.js';
+import roomRoutes from './routes/room.routes.js';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
 
 export function createApp() {
@@ -31,6 +32,7 @@ export function createApp() {
   );
 
   app.use('/api', healthRoutes);
+  app.use('/api/rooms', roomRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -3,12 +3,15 @@ import { createServer } from 'http';
 import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { connectDatabase, disconnectDatabase } from './config/db.js';
+import { initSocketServer } from './config/socket.js';
 
 async function bootstrap() {
   await connectDatabase();
 
   const app = createApp();
   const httpServer = createServer(app);
+
+  initSocketServer(httpServer);
 
   httpServer.listen(env.PORT, () => {
     console.log(`Server running on http://localhost:${env.PORT}`);

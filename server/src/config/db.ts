@@ -1,10 +1,17 @@
+import dns from 'dns';
 import mongoose from 'mongoose';
 import { env } from './env.js';
 
 export async function connectDatabase(): Promise<void> {
+  // Some routers/ISPs block or mishandle SRV lookups that mongodb+srv requires.
+  // Public DNS resolvers fix querySrv ECONNREFUSED on Windows home networks.
+  if (env.MONGODB_URI.startsWith('mongodb+srv://')) {
+    dns.setServers(['8.8.8.8', '1.1.1.1']);
+  }
+
   try {
     await mongoose.connect(env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 10000,
     });
     console.log('MongoDB connected');
   } catch (error) {

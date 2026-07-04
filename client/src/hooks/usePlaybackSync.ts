@@ -35,14 +35,17 @@ export function usePlaybackSync({
         return;
       }
 
+      if (payload.action === 'change-video' && payload.videoId) {
+        lastSyncRef.current = payload;
+        setSyncState(payload);
+        onVideoChange?.(payload.videoId);
+        pendingSyncRef.current = payload;
+        return;
+      }
+
       isApplyingRemote.current = true;
       lastSyncRef.current = payload;
       setSyncState(payload);
-
-      if (payload.action === 'change-video' && payload.videoId) {
-        onVideoChange?.(payload.videoId);
-        player.loadVideoById(payload.videoId, payload.currentTime);
-      }
 
       const targetTime = computeTargetTime(payload);
       player.setPlaybackRate(payload.playbackRate);

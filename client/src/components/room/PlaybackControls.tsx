@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { PLAYBACK_RATES } from '@/utils/playback';
 import { formatTime } from '@/utils/youtube';
 
@@ -22,7 +23,15 @@ export function PlaybackControls({
   onSeek,
   onRateChange,
 }: PlaybackControlsProps) {
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragTime, setDragTime] = useState(0);
+  const shownTime = isDragging ? dragTime : currentTime;
+  const progress = duration > 0 ? (shownTime / duration) * 100 : 0;
+
+  function commitSeek(value: number) {
+    setIsDragging(false);
+    onSeek(value);
+  }
 
   return (
     <div className="border-t border-white/5 p-4">
@@ -43,7 +52,7 @@ export function PlaybackControls({
         )}
 
         <span className="w-12 shrink-0 text-xs text-white/50 tabular-nums">
-          {formatTime(currentTime)}
+          {formatTime(shownTime)}
         </span>
 
         {canControl ? (
@@ -52,8 +61,18 @@ export function PlaybackControls({
             min={0}
             max={duration || 100}
             step={0.1}
-            value={currentTime}
-            onChange={(e) => onSeek(Number(e.target.value))}
+            value={shownTime}
+            onPointerDown={() => {
+              setIsDragging(true);
+              setDragTime(shownTime);
+            }}
+            onChange={(e) => setDragTime(Number(e.target.value))}
+            onMouseUp={(e) => {
+              if (isDragging) commitSeek(Number((e.target as HTMLInputElement).value));
+            }}
+            onTouchEnd={(e) => {
+              if (isDragging) commitSeek(Number((e.target as HTMLInputElement).value));
+            }}
             className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-stream-700 accent-accent-violet"
           />
         ) : (

@@ -79,7 +79,7 @@ npm run lint          # Lint both packages
 | M1        | ✅     | Project scaffold + landing page      |
 | M2        | ✅     | Guest rooms (REST API)               |
 | M3        | ✅     | Real-time presence (WebSockets)      |
-| M4        | ⬜     | YouTube playback sync                |
+| M4        | ✅     | YouTube playback sync                |
 | M5        | ⬜     | Chat + reactions                     |
 | M6        | ⬜     | Room permissions                     |
 | M7        | ⬜     | Authentication (JWT)                 |

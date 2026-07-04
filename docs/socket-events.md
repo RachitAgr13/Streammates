@@ -118,3 +118,47 @@ A member can be offline (closed tab) but still listed in the room.
 1. **Duplicate tabs** — Same `guestId` disconnects the previous socket
 2. **REST join before socket** — Socket join validates against DB membership
 3. **Stale member list** — `room:members-sync` refreshes from DB on every connect
+
+---
+
+## Playback Events (M4)
+
+Server-authoritative playback. Only the **host** (or all members if `sharedControls` is enabled) can emit control events.
+
+### Client → Server
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `playback:play` | `{ currentTime }` | Start playback at time |
+| `playback:pause` | `{ currentTime }` | Pause at time |
+| `playback:seek` | `{ currentTime }` | Jump to time |
+| `playback:rate` | `{ currentTime, playbackRate }` | Change speed (0.25–2x) |
+| `playback:change-video` | `{ videoId }` | Load YouTube video (URL or ID) |
+
+### Server → Client
+
+### `playback:sync`
+
+Broadcast to all room members after any playback change or on socket join.
+
+```json
+{
+  "isPlaying": true,
+  "currentTime": 42.5,
+  "playbackRate": 1,
+  "serverTimestamp": 1710000000000,
+  "videoId": "dQw4w9WgXcQ",
+  "action": "play",
+  "actionBy": "guest-uuid"
+}
+```
+
+### Sync algorithm (client)
+
+When playing, target time is computed with latency compensation:
+
+```
+targetTime = currentTime + (now - serverTimestamp) / 1000 * playbackRate
+```
+
+Clients resync if drift exceeds 2 seconds.

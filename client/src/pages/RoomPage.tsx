@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { Button } from '@/components/ui/Button';
 import { ConnectionBadge } from '@/components/ui/ConnectionBadge';
+import { PlaybackControls } from '@/components/room/PlaybackControls';
+import { VideoUrlInput } from '@/components/room/VideoUrlInput';
+import { YouTubePlayer, type YouTubePlayerHandle } from '@/components/room/YouTubePlayer';
+import { usePlaybackSync } from '@/hooks/usePlaybackSync';
 import { useRoomSocket } from '@/hooks/useRoomSocket';
 import { getRoom } from '@/services/roomService';
 import { ApiError } from '@/services/api';
@@ -18,9 +22,11 @@ export function RoomPage() {
   const inviteLink = useRoomStore((s) => s.inviteLink);
 
   const [room, setLocalRoom] = useState<Room | null>(null);
+  const [videoId, setVideoId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const playerRef = useRef<YouTubePlayerHandle>(null);
 
   const roomCode = code?.toUpperCase() ?? '';
   const session = getSession(roomCode);
@@ -44,6 +50,24 @@ export function RoomPage() {
     onMembersSync: handleMembersSync,
   });
 
+  const isHost = session?.guestId === room?.hostGuestId;
+  const canControl = isHost || (room?.settings.sharedControls ?? false);
+
+  const handleVideoChange = useCallback((id: string) => {
+    setVideoId(id);
+    setLocalRoom((prev) =>
+      prev ? { ...prev, videoType: 'youtube', videoSource: id } : prev,
+    );
+  }, []);
+
+  const playback = usePlaybackSync({
+    enabled: connectionStatus === 'connected' && !!session,
+    canControl,
+    guestId: session?.guestId,
+    playerRef,
+    onVideoChange: handleVideoChange,
+  });
+
   useEffect(() => {
     if (!roomCode) return;
 
@@ -55,6 +79,9 @@ export function RoomPage() {
         const { data } = await getRoom(roomCode);
         setLocalRoom(data.room);
         setRoom(data.room);
+        if (data.room.videoType === 'youtube' && data.room.videoSource) {
+          setVideoId(data.room.videoSource);
+        }
       } catch (err) {
         if (err instanceof ApiError) {
           setError(err.message);
@@ -106,7 +133,7 @@ export function RoomPage() {
     );
   }
 
-  const isHost = session?.guestId === room.hostGuestId;
+  const isHostView = session?.guestId === room.hostGuestId;
 
   const sortedMembers = [...room.members].sort((a, b) => {
     const aOnline = onlineGuestIds.has(a.guestId) ? 0 : 1;
@@ -136,7 +163,7 @@ export function RoomPage() {
               <span>
                 {onlineCount} online · {room.memberCount} total
               </span>
-              {isHost && (
+              {isHostView && (
                 <>
                   <span>·</span>
                   <span className="text-accent-violet">You are the host</span>
@@ -160,35 +187,42 @@ export function RoomPage() {
             className="overflow-hidden rounded-2xl glass-strong"
           >
             <div className="relative aspect-video bg-stream-900">
-              {room.videoType === 'youtube' && room.videoSource ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                  <div className="rounded-xl bg-stream-800 px-4 py-2 font-mono text-sm text-white/60">
-                    YouTube: {room.videoSource}
-                  </div>
-                  <p className="text-sm text-white/40">Video player arrives in Milestone 4</p>
-                </div>
+              {videoId ? (
+                <YouTubePlayer
+                  key={videoId}
+                  ref={playerRef}
+                  videoId={videoId}
+                  onReady={playback.handlePlayerReady}
+                />
+              ) : canControl ? (
+                <VideoUrlInput
+                  onSubmit={playback.emitChangeVideo}
+                  disabled={connectionStatus !== 'connected'}
+                />
               ) : (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
                   <PlayIcon />
-                  <p className="text-white/50">No video selected yet</p>
-                  {isHost && (
-                    <p className="text-sm text-white/30">Paste a YouTube link to get started</p>
-                  )}
+                  <p className="text-white/50">Waiting for host to pick a video</p>
+                </div>
+              )}
+
+              {videoId && canControl && (
+                <div className="absolute top-3 right-3 z-10">
+                  <VideoChangeButton onSubmit={playback.emitChangeVideo} />
                 </div>
               )}
             </div>
 
-            <div className="border-t border-white/5 p-4">
-              <div className="flex items-center gap-4">
-                <div className="h-1 flex-1 rounded-full bg-stream-700">
-                  <div className="h-full w-0 rounded-full bg-accent-violet" />
-                </div>
-                <span className="text-xs text-white/40">0:00</span>
-              </div>
-              <p className="mt-3 text-center text-xs text-white/30">
-                Playback sync coming in Milestone 4
-              </p>
-            </div>
+            <PlaybackControls
+              isPlaying={playback.isPlaying}
+              currentTime={playback.displayTime}
+              duration={playback.duration}
+              playbackRate={playback.playbackRate}
+              canControl={canControl && connectionStatus === 'connected'}
+              onTogglePlay={playback.togglePlayPause}
+              onSeek={playback.emitSeek}
+              onRateChange={playback.emitRate}
+            />
           </motion.div>
 
           <div className="space-y-4">
@@ -276,6 +310,56 @@ function MemberItem({
         </span>
       )}
     </li>
+  );
+}
+
+function VideoChangeButton({ onSubmit }: { onSubmit: (url: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState('');
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!url.trim()) return;
+    onSubmit(url.trim());
+    setUrl('');
+    setOpen(false);
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-lg bg-black/60 px-3 py-1.5 text-xs text-white/80 backdrop-blur-sm transition-colors hover:bg-black/80"
+      >
+        Change video
+      </button>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="flex gap-2 rounded-xl bg-black/80 p-2 backdrop-blur-sm"
+    >
+      <input
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        placeholder="YouTube URL"
+        className="w-48 rounded-lg bg-stream-800 px-3 py-1.5 text-xs text-white outline-none"
+        autoFocus
+      />
+      <button type="submit" className="rounded-lg bg-accent-violet px-3 py-1.5 text-xs font-medium text-white">
+        Go
+      </button>
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        className="rounded-lg px-2 py-1.5 text-xs text-white/50 hover:text-white"
+      >
+        ✕
+      </button>
+    </form>
   );
 }
 

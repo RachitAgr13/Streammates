@@ -1,4 +1,5 @@
 import type { MemberRole } from './room.types.js';
+import type { PlaybackSyncPayload } from './playback.types.js';
 
 export interface PresenceMember {
   guestId: string;
@@ -30,11 +31,17 @@ export interface ServerToClientEvents {
   'member:online': (data: PresenceMember) => void;
   'member:offline': (data: { guestId: string }) => void;
   'room:error': (data: { message: string }) => void;
+  'playback:sync': (data: PlaybackSyncPayload) => void;
 }
 
 export interface ClientToServerEvents {
   'room:join': (payload: RoomJoinPayload) => void;
   'room:leave': () => void;
+  'playback:play': (payload: { currentTime: number }) => void;
+  'playback:pause': (payload: { currentTime: number }) => void;
+  'playback:seek': (payload: { currentTime: number }) => void;
+  'playback:rate': (payload: { currentTime: number; playbackRate: number }) => void;
+  'playback:change-video': (payload: { videoId: string }) => void;
 }
 
 export interface InterServerEvents {

@@ -1,8 +1,10 @@
 import type { Socket } from 'socket.io';
 import { presenceService } from '../services/presence.service.js';
 import { validateRoomMember } from '../services/room.service.js';
+import { getPlaybackSyncForRoom } from '../services/playback.service.js';
 import { isAppError } from '../utils/errors.js';
 import { roomJoinPayloadSchema } from '../validators/socket.validator.js';
+import { registerPlaybackHandlers } from './playback.socket.js';
 import type { AppSocketServer } from '../config/socket.js';
 import {
   socketRoomName,
@@ -20,6 +22,8 @@ type AppSocket = Socket<
 >;
 
 export function registerRoomHandlers(io: AppSocketServer, socket: AppSocket): void {
+  registerPlaybackHandlers(io, socket);
+
   socket.on('room:join', async (payload) => {
     try {
       const parsed = roomJoinPayloadSchema.safeParse(payload);
@@ -68,6 +72,9 @@ export function registerRoomHandlers(io: AppSocketServer, socket: AppSocket): vo
       });
 
       socket.to(channel).emit('member:online', member);
+
+      const playbackSync = await getPlaybackSyncForRoom(room.roomCode, guestId);
+      socket.emit('playback:sync', playbackSync);
     } catch (error) {
       const message = isAppError(error)
         ? error.message
